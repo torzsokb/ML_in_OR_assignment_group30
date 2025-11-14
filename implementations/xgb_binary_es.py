@@ -91,13 +91,13 @@ def objective(trial):
               'refresh_leaf': trial.suggest_categorical('refresh_leaf', [0, 1]),
               'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 15),
               'random_state': 0,
-              'objective': trial.suggest_categorical('objective', ["binary:logistic", "binary:hinge", "binary:logitraw"]),
-            #   'objective': trial.suggest_categorical('objective', ["binary:logistic"]),
+            #   'objective': trial.suggest_categorical('objective', ["binary:logistic", "binary:hinge", "binary:logitraw"]),
+              'objective': trial.suggest_categorical('objective', ["binary:logistic"]),
 
               'eval_metric': ["error", "auc", "logloss"]
               }
 
-    num_boost_round = trial.suggest_int('num_boost_round', 2, 25)
+    num_boost_round = trial.suggest_categorical('num_boost_round', [6])
     early_stopping_rounds = trial.suggest_int('early_stopping_rounds', 2, 25)
     min_delta = trial.suggest_float('min_delta', 0.000001, 0.2, log=True)
     return inner_cv(outer_fold=k, params=params, num_boost_round=num_boost_round, early_stopping_rounds=early_stopping_rounds, min_delta=min_delta)
@@ -157,13 +157,13 @@ def main():
         
 
         next()
-    with open(f"documents/outputs/xgboost/classification/params/xgb_es_rr.json", "w") as f:
+    with open(f"documents/outputs/xgboost/classification/params/xgb_es_rr_6.json", "w") as f:
             json.dump(fold_params, f)
-    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_es_rr.json", "w") as f:
+    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_es_rr_6.json", "w") as f:
             json.dump(feature_importances, f)
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_xgb_es_rr.csv", index=False)
+    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_xgb_es_rr_6.csv", index=False)
 
 
 
