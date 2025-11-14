@@ -46,9 +46,9 @@ for fold in range(n_folds):
             inner_train_data = xgb.DMatrix(data = inner_train_df_split.drop(["y1", "cv_fold"], axis=1), label=inner_train_df_split["y1"])
             inner_validation_data = xgb.DMatrix(data = inner_validation_df.drop(["y1", "cv_fold"], axis=1), label=inner_validation_df["y1"])
             
-            inner_folds.append({"train": inner_train_data, "test": inner_test_data, "validation": inner_validation_data})
+            inner_folds.append({"train": inner_train_data, "test": inner_test_data, "validation": inner_validation_data, "balance": (1 - inner_train_df_split["y1"].mean()) / inner_train_df_split["y1"].mean()})
 
-    folds[fold] = {"holdout": holdout_data, "train": outer_train_data, "validation": outer_validation_data,"inner_folds": inner_folds} 
+    folds[fold] = {"holdout": holdout_data, "train": outer_train_data, "validation": outer_validation_data,"inner_folds": inner_folds, "balance": (1 - outer_train_df_split["y1"].mean()) / outer_train_df_split["y1"].mean()} 
 
 k = 0
 
@@ -61,8 +61,10 @@ def inner_cv(outer_fold: int, params: dict, num_boost_round: int, early_stopping
     scores = []
     for inner_fold in folds[outer_fold]["inner_folds"]:
         evals_result = {}
-        es = xgb.callback.EarlyStopping(rounds=early_stopping_rounds, metric_name="logloss", data_name="val", save_best=True, maximize=False, min_delta=min_delta)
-        model = xgb.train(params, num_boost_round=num_boost_round, 
+        # params["scale_pos_weight"] = inner_fold["balance"]
+        # params["num_class"] = 1
+        es = xgb.callback.EarlyStopping(rounds=early_stopping_rounds, metric_name="error", data_name="val", save_best=True, maximize=False, min_delta=min_delta)
+        model = xgb.train(params, num_boost_round=num_boost_round,
                           dtrain=inner_fold["train"], 
                           evals=[(inner_fold["test"], "test"), (inner_fold["train"], "train"), (inner_fold["validation"], "val")], 
                           callbacks = [es],
@@ -89,7 +91,7 @@ def objective(trial):
               'refresh_leaf': trial.suggest_categorical('refresh_leaf', [0, 1]),
               'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 15),
               'random_state': 0,
-              'objective': trial.suggest_categorical('objective', ["reg:squarederror", "binary:logistic", "binary:hinge", "binary:logitraw"]),
+              'objective': trial.suggest_categorical('objective', ["binary:logistic", "binary:hinge", "binary:logitraw"]),
             #   'objective': trial.suggest_categorical('objective', ["binary:logistic"]),
 
               'eval_metric': ["error", "auc", "logloss"]
@@ -104,12 +106,13 @@ def objective(trial):
 def main():
 
     output = {"cv-error": [], "train-error": [], "val-error": [], "oos-error": [], "train-auc": [], "val-auc": [], "oos-auc": [], "train-logloss": [], "val-logloss": [], "oos-logloss": []}
-    fold_params = []
+    fold_params = {}
+    feature_importances = {}
 
     for i in range(n_folds):
 
         study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=0), pruner=optuna.pruners.MedianPruner())
-        study.optimize(objective, n_trials=200, timeout=600)
+        study.optimize(objective, n_trials=150, timeout=600)
         fig = plot_parallel_coordinate(study)
         show(fig)
 
@@ -117,7 +120,9 @@ def main():
         params=study.best_params
         print(params)
         params["eval_metric"] = ["error", "auc", "logloss"]
-        es = xgb.callback.EarlyStopping(rounds=study.best_params["early_stopping_rounds"], metric_name="logloss", data_name="val", save_best=True, maximize=False, min_delta=study.best_params["min_delta"])
+        # params["num_class"] = 1
+        # params["scale_pos_weight"]=folds[k]["balance"]
+        es = xgb.callback.EarlyStopping(rounds=study.best_params["early_stopping_rounds"], metric_name="error", data_name="val", save_best=True, maximize=False, min_delta=study.best_params["min_delta"])
         model = xgb.train(params, num_boost_round=study.best_params["num_boost_round"], 
                           dtrain=folds[k]["train"], 
                           evals=[(folds[k]["holdout"], "oos"), (folds[k]["train"], "train"), (folds[k]["validation"], "val")],
@@ -140,16 +145,25 @@ def main():
 
         # predictions = model.predict(folds[k]["holdout"])
         # print(predictions)
+        importance_gain  = model.get_score(importance_type='gain')
+        importance_weight = model.get_score(importance_type='weight')
 
-        fold_params.append(params)
-        with open(f"documents/outputs/xgboost/classification/params/fold_{k}11.json", "w") as f:
-            json.dump(params, f)
+        fold_params[k] = params
+        feature_importances[k] = {
+            'feature': list(importance_gain.keys()),
+            'gain': list(importance_gain.values()),
+            'weight': [importance_weight.get(f, 0) for f in importance_gain.keys()]
+            }
+        
 
         next()
-
+    with open(f"documents/outputs/xgboost/classification/params/xgb_es_rr.json", "w") as f:
+            json.dump(fold_params, f)
+    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_es_rr.json", "w") as f:
+            json.dump(feature_importances, f)
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out.csv", index=False)
+    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_xgb_es_rr.csv", index=False)
 
 
 
