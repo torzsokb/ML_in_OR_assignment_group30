@@ -4,14 +4,13 @@ import numpy as np
 import optuna
 from optuna.visualization import plot_parallel_coordinate
 from plotly.io import show
+import json
 
 df = pd.read_csv("documents/data/processed_data.csv")
 df = df.drop(columns=["y1"], axis=1)
 n_folds = len(pd.unique(df["cv_fold"]))
 
 folds = {}
-
-
 
 for fold in range(n_folds):
     
@@ -50,6 +49,10 @@ for fold in range(n_folds):
 
 k = 0 
 
+def next():
+    global k
+    k += 1
+
 def inner_cv(outer_fold: int, params: dict, num_boost_round: int, early_stopping_rounds: int, min_delta: float) -> float:
 
     scores = []
@@ -61,9 +64,6 @@ def inner_cv(outer_fold: int, params: dict, num_boost_round: int, early_stopping
                           callbacks = [xgb.callback.EarlyStopping(rounds=early_stopping_rounds, metric_name="rmse", data_name="val", save_best=True, maximize=False, min_delta=min_delta)],
                           evals_result=evals_result, verbose_eval=False)
         
-        # print(evals_result)
-        # print(evals_result["test"]["error"][-1])
-
         scores.append(evals_result["test"]["rmse"][-1])
 
     return np.mean(scores)
@@ -81,18 +81,11 @@ def objective(trial):
               'colsample_bynode': trial.suggest_float('colsample_bynode', 0.1, 1),
               'subsample': trial.suggest_float('subsample', 0.4, 1),
               'grow_policy': trial.suggest_categorical('grow_policy', ['depthwise', 'lossguide']),
-            #   'sampling_method': trial.suggest_categorical('sampling_method', ['uniform', 'gradient_based']),
               'refresh_leaf': trial.suggest_categorical('refresh_leaf', [0, 1]),
               'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 15),
               'random_state': 0,
-            #   'device': "gpu"
-            #   'objective': "binary:logistic"
-            #   'num_boost_round': trial.suggest_int('num_boost_round', 2, 25),
-
               'objective': trial.suggest_categorical('objective', ["reg:squarederror", "count:poisson"]),
               'eval_metric': ["rmse", "poisson-nloglik"]
-            #   'eval_metric': ["error"]
-
               }
 
     num_boost_round = trial.suggest_int('num_boost_round', 2, 25)
@@ -104,23 +97,45 @@ def objective(trial):
 
 
 def main():
+
+    output = {"train-rmse": [], "val-rmse": [], "oos-rmse": [], "train-poisson-nloglink": [], "val-poisson-nloglink": [], "oos-poisson-nloglink": []}
+    fold_params = []
+
     for i in range(1):
+
         study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(), pruner=optuna.pruners.MedianPruner())
         study.optimize(objective, n_trials=150, timeout=600)
         fig = plot_parallel_coordinate(study)
-
         show(fig)
+
         final_evals_result = {}
         params=study.best_params
         print(params)
         params["eval_metric"] = ["rmse", "poisson-nloglik"]
-        # model = xgb.train(params=params, dtrain=folds[k]["train"], num_boost_round=study.best_params["num_boost_round"], evals=[(folds[k]["holdout"], "oos"), (folds[k]["train"], "train")], evals_result=final_evals_result)
-        # print(final_evals_result)
         model = xgb.train(params, num_boost_round=study.best_params["num_boost_round"], 
                           dtrain=folds[k]["train"], 
                           evals=[(folds[k]["holdout"], "oos"), (folds[k]["train"], "train"), (folds[k]["validation"], "val")],
                           callbacks = [xgb.callback.EarlyStopping(rounds=study.best_params["early_stopping_rounds"], metric_name="rmse", data_name="val", save_best=True, maximize=False, min_delta=study.best_params["min_delta"])],
                           evals_result=final_evals_result, verbose_eval=True)
+        
+        output["train-rmse"].append(final_evals_result["train"]["rmse"][-1])
+        output["val-rmse"].append(final_evals_result["val"]["rmse"][-1])
+        output["oos-rmse"].append(final_evals_result["oos"]["rmse"][-1])
+
+        output["train-poisson-nloglik"].append(final_evals_result["train"]["poisson-nloglik"][-1])
+        output["val-poisson-nloglik"].append(final_evals_result["val"]["poisson-nloglik"][-1])
+        output["oos-poisson-nloglik"].append(final_evals_result["oos"]["poisson-nloglik"][-1])
+
+        fold_params.append(params)
+        with open(f"documents/data/outputs/xgboost/regression/params/fold_{k}.json") as f:
+            json.dump(params, f)
+
+        next()
+
+    metrics = pd.DataFrame.from_dict(output)
+    metrics.to_csv("documents/data/outputs/xgboost/regression/performance_metrics/out.csv", index=False)
+
+
 
 
 if __name__ == "__main__":

@@ -8,7 +8,6 @@ import json
 
 df = pd.read_csv("documents/data/processed_data.csv")
 df = df.drop(columns=["y2"], axis=1)
-df = df.drop(columns=["x1", "x2", "x3", "x4", "x5"], axis=1)
 
 n_folds = len(pd.unique(df["cv_fold"]))
 
@@ -61,40 +60,41 @@ def inner_cv(outer_fold: int, params: dict, num_boost_round: int) -> float:
 
 def objective(trial):
 
-    params = {'learning_rate': trial.suggest_float('learning_rate', 0.0001, 1, log=True),
+    params = {'learning_rate': trial.suggest_float('learning_rate', 0.001, 1, log=True),
               'max_depth': trial.suggest_int('max_depth', 1, 10),
               'min_child_weight': trial.suggest_int('min_child_weight', 1, 12),
               'gamma': trial.suggest_float('gamma', 0.1, 10),
-              'reg_lambda': trial.suggest_float('reg_lambda', 0, 7),
-              'reg_alpha': trial.suggest_float('reg_alpha', 0, 7),
+              'reg_lambda': trial.suggest_float('reg_lambda', 0.01, 7),
+              'reg_alpha': trial.suggest_float('reg_alpha', 0.01, 7),
               'max_bin': trial.suggest_categorical('max_bin', [16, 32, 64, 128, 256, 512]),
               'colsample_bytree': trial.suggest_float('colsample_bytree', 0.1, 1),
               'colsample_bylevel' : trial.suggest_float('colsample_bylevel', 0.1, 1),
               'colsample_bynode': trial.suggest_float('colsample_bynode', 0.1, 1),
-              'subsample': trial.suggest_float('subsample', 0.4, 1),
+              'subsample': trial.suggest_float('subsample', 0.5, 1),
               'grow_policy': trial.suggest_categorical('grow_policy', ['depthwise', 'lossguide']),
               'refresh_leaf': trial.suggest_categorical('refresh_leaf', [0, 1]),
-              'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 15),
+              'num_parallel_tree': trial.suggest_int('num_parallel_tree', 3, 15),
               'random_state': 0,
-              'objective': trial.suggest_categorical('objective', ["reg:squarederror", "binary:logistic", "binary:hinge", "binary:logitraw"]),
-            #   'objective': trial.suggest_categorical('objective', ["binary:logistic"]),
+            #   'objective': trial.suggest_categorical('objective', ["binary:logistic", "binary:hinge", "binary:logitraw"]),
+              'objective': trial.suggest_categorical('objective', ["binary:logistic"]),
 
               'eval_metric': ["error", "logloss"]
               }
 
-    num_boost_round = trial.suggest_int('num_boost_round', 2, 25)
+    num_boost_round = trial.suggest_categorical('num_boost_round', [4])
     return inner_cv(outer_fold=k, params=params, num_boost_round=num_boost_round)
     
 
 def main():
 
     output = {"cv-error": [], "train-error": [], "oos-error": [], "train-logloss": [], "oos-logloss": []}
-    fold_params = []
+    fold_params = {}
+    feature_importances = {}
 
     for i in range(n_folds):
 
         study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=0), pruner=optuna.pruners.MedianPruner())
-        study.optimize(objective, n_trials=100, timeout=600)
+        study.optimize(objective, n_trials=150, timeout=600)
         fig = plot_parallel_coordinate(study)
         show(fig)
 
@@ -117,15 +117,25 @@ def main():
         # predictions = model.predict(folds[k]["holdout"])
         # print(predictions)
 
-        fold_params.append(params)
-        with open(f"documents/outputs/xgboost/classification/params/fold_{k}_noes.json", "w") as f:
-            json.dump(params, f)
+        importance_gain  = model.get_score(importance_type='gain')
+        importance_weight = model.get_score(importance_type='weight')
+
+        fold_params[k] = params
+        feature_importances[k] = {
+            'feature': list(importance_gain.keys()),
+            'gain': list(importance_gain.values()),
+            'weight': [importance_weight.get(f, 0) for f in importance_gain.keys()]
+            }
 
         next()
 
+    with open(f"documents/outputs/xgboost/classification/params/xgb_noes_r.json", "w") as f:
+            json.dump(fold_params, f)
+    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_noes_r.json", "w") as f:
+            json.dump(feature_importances, f)
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_noes.csv", index=False)
+    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_noes_r.csv", index=False)
 
 
 
