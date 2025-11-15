@@ -27,12 +27,12 @@ for fold in range(n_folds):
     scaler.fit(train_df[["x1", "x2", "x3", "x4", "x5"]])
     train_df[["x1", "x2", "x3", "x4", "x5"]] = scaler.transform(train_df[["x1", "x2", "x3", "x4", "x5"]])
     train_X = train_df.drop(columns=["y1", "cv_fold"], axis=1).to_numpy()
-    train_y = train_df["y1"].to_numpy()
+    train_y = train_df[["y1"]].to_numpy()
 
     holdout_df = df[df["cv_fold"] == fold]
     holdout_df[["x1", "x2", "x3", "x4", "x5"]] = scaler.transform(holdout_df[["x1", "x2", "x3", "x4", "x5"]])
     holdout_X = holdout_df.drop(columns=["y1", "cv_fold"], axis=1).to_numpy()
-    holdout_y = holdout_df["y1"].to_numpy()
+    holdout_y = holdout_df[["y1"]].to_numpy()
 
 
 
@@ -42,10 +42,10 @@ for fold in range(n_folds):
             
             inner_test_df = train_df[train_df["cv_fold"] == inner_fold]
             inner_test_X = inner_test_df.drop(columns=["y1", "cv_fold"], axis=1).to_numpy()
-            inner_test_y = inner_test_df["y1"].to_numpy()
+            inner_test_y = inner_test_df[["y1"]].to_numpy()
             inner_train_df = train_df[train_df["cv_fold"] != inner_fold]
             inner_train_X = inner_train_df.drop(columns=["y1", "cv_fold"], axis=1).to_numpy()
-            inner_train_y = inner_train_df["y1"].to_numpy()
+            inner_train_y = inner_train_df[["y1"]].to_numpy()
             
             inner_folds.append({"train_X": inner_train_X, "train_y": inner_train_y, "test_X": inner_test_X, "test_y": inner_test_y})
 
@@ -86,10 +86,10 @@ def main():
     output = {"cv-error": [], "oos-error": []}
     fold_params = []
 
-    for i in range(n_folds):
+    for i in range(1):
 
         study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=0), pruner=optuna.pruners.MedianPruner())
-        study.optimize(objective, n_trials=200, timeout=600)
+        study.optimize(objective, n_trials=20, timeout=600)
         fig = plot_parallel_coordinate(study)
         show(fig)
 
@@ -102,14 +102,14 @@ def main():
         output["oos-error"].append(1-accuracy_score(preds, folds[k]["holdout_y"]))
 
         fold_params.append(params)
-        with open(f"documents/outputs/xgboost/classification/params/fold_{k}_svm_mms3.json", "w") as f:
-            json.dump(params, f)
+        # with open(f"documents/outputs/xgboost/classification/params/fold_{k}_svm_mms3.json", "w") as f:
+        #     json.dump(params, f)
 
         next()
 
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_svm_mms3.csv", index=False)
+    # metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_svm_mms3.csv", index=False)
 
 
 
