@@ -98,7 +98,7 @@ def objective(trial):
 
 def main():
 
-    output = {"train-rmse": [], "val-rmse": [], "oos-rmse": [], "train-poisson-nloglink": [], "val-poisson-nloglink": [], "oos-poisson-nloglink": []}
+    output = {"train-rmse": [], "val-rmse": [], "oos-rmse": [], "train-poisson-nloglik": [], "val-poisson-nloglik": [], "oos-poisson-nloglik": []}
     fold_params = []
 
     for i in range(1):
