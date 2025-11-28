@@ -39,23 +39,22 @@ def get_folds(target_mode: int, scaler_type: str=None) -> dict:
     
     df = pd.read_csv("documents/data/processed_data.csv")
 
+    cols_to_scale = ["x1", "x2", "x3", "x4", "x5"]
+
     match target_mode:
         case 1:
             target = "y1"
-            cols_to_scale = ["x1", "x2", "x3", "x4", "x5"]
             cols_to_drop = ["y1", "cv_fold"]
             df = df.drop(columns=["y2"], axis=1)
 
         case 2:
             target = "y2"
-            cols_to_scale = ["y2","x1", "x2", "x3", "x4", "x5"]
             cols_to_drop = ["y2", "cv_fold"]
             df = df.drop(columns=["y1"], axis=1)
 
         case _:
-            cols_to_scale = ["y2","x1", "x2", "x3", "x4", "x5"]
-            cols_to_drop = ["cv_fold"]
             target = ["y1", "y2"]
+            cols_to_drop = ["cv_fold"]
 
     match scaler_type:
         case "minmax":

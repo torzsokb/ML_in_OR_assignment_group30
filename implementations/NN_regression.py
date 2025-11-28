@@ -1,87 +1,13 @@
-import pandas as pd
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
+from optuna.visualization import plot_parallel_coordinate
+from plotly.io import show
+import optuna
 
-def main():
-    df = pd.read_csv(r"C:\Users\roela\PycharmProjects\ML_in_OR_assignment_group30\documents\data\processed_data.csv")
-    df = df.drop(columns=["y1"], axis=1) # Remove classification data
-    n_folds = len(pd.unique(df["cv_fold"]))
-
-    in_sample_losses = []
-    oos_losses = []
-
-    for fold in range(n_folds):
-        fold_numbers = [i for i in range(n_folds)]
-        fold_numbers.remove(fold)
-        outer_validation = (fold + 1) % n_folds # Slightly different between implementations!!!
-
-        print(f"fold: {fold}, outer_validation: {outer_validation}")
-
-        # Select holdout and training data based on fold column == or != to fold
-        holdout_df = df[df["cv_fold"] == fold]
-        train_df = df[df["cv_fold"] != fold]
-
-        train_x = torch.tensor(train_df.drop(["y2", "cv_fold"], axis=1).values, dtype=torch.float32)
-        train_y = torch.tensor(train_df["y2"].values, dtype=torch.float32).unsqueeze(1)
-        training_data = TensorDataset(train_x, train_y)
-
-        holdout_x = torch.tensor(holdout_df.drop(["y2", "cv_fold"], axis=1).values, dtype=torch.float32)
-        holdout_y = torch.tensor(holdout_df["y2"].values, dtype=torch.float32).unsqueeze(1)
-        holdout_data = TensorDataset(holdout_x, holdout_y)
-
-        # Temp fixed hyper params:
-        nodes_layer_one = 10
-        nodes_layer_two = 10
-        activation_f_one = nn.Softplus()
-        activation_f_two = nn.Softplus()
-        output_f = nn.Identity()
-        loss_f = nn.MSELoss()
-        learning_rate = 0.01
-        batch_size = int(0.2 * training_data.tensors[0].shape[0])
-        stopping_criterion = 250
-        regularization_lambda = 0.1
-
-        model = trained_neural_net(training_data=training_data,
-                                   nodes_layer_one=nodes_layer_one,
-                                   activation_f_one=activation_f_one,
-                                   nodes_layer_two=nodes_layer_two,
-                                   activation_f_two=activation_f_two,
-                                   output_f=output_f,
-                                   loss_f=loss_f,
-                                   learning_rate=learning_rate,
-                                   batch_size=batch_size,
-                                   stopping_criterion=stopping_criterion,
-                                   regularization_lambda=regularization_lambda)
-
-        # Printing in sample and oos pred quality
-        model.eval()
-        train_losses = []
-        with torch.no_grad():
-            for batch_X, batch_y in training_data:
-                preds = model(batch_X)
-                loss = loss_f(preds, batch_y)
-                train_losses.append(loss.item())
-
-        print(f"In-sample Loss: {sum(train_losses) / len(train_losses):.4f}")
-
-        val_losses = []
-        with torch.no_grad():
-            for batch_X, batch_y in holdout_data:
-                preds = model(batch_X)
-                loss = loss_f(preds, batch_y)
-                val_losses.append(loss.item())
-        print(f"Oos Loss: {sum(val_losses) / len(val_losses):.4f}")
-
-        in_sample_losses.extend(train_losses)
-        oos_losses.extend(val_losses)
-
-    print()
-    print("Average over all folds:")
-    print(f"In-sample loss: {sum(in_sample_losses) / len(in_sample_losses):.4f}")
-    print(f"Oos loss: {sum(oos_losses) / len(oos_losses):.4f}")
-
+import data_utils
 
 # Two-layered feed-forward Neural Net class
 class RegressionNeuralNet(nn.Module):
@@ -90,8 +16,7 @@ class RegressionNeuralNet(nn.Module):
                  nodes_layer_one: int,
                  activation_f_one: nn.Module,
                  nodes_layer_two: int,
-                 activation_f_two: nn.Module,
-                 output_f: nn.Module):
+                 activation_f_two: nn.Module):
         super().__init__() # super(RegressionNeuralNet, self).etc by GPT
         # self.flatten = nn.Flatten() # part of pytorch tutorial, not of gpt
         self.net = nn.Sequential(
@@ -99,8 +24,8 @@ class RegressionNeuralNet(nn.Module):
             activation_f_one,
             nn.Linear(in_features= nodes_layer_one, out_features= nodes_layer_two),
             activation_f_two,
-            nn.Linear(in_features= nodes_layer_two, out_features= 1),
-            output_f)
+            nn.Linear(in_features= nodes_layer_two, out_features= 1)
+        )
 
     def forward(self, x):
         return self.net(x)
@@ -108,30 +33,27 @@ class RegressionNeuralNet(nn.Module):
 # Creates and trains the neural net
 #
 # Hyperparameters to be tuned / to be chosen:
-# xFirst layer:
-# x  # of nodes
-# x  Activation function
-# xSecond layer:
-# x  # of nodes
-# x  Activation function
-# Starting values for beta
-# ?Output function
-# xLoss function (i.e.: nn.MSELoss() )
-# xLearning rate
-# xMini-batch subgradient descent: batch size
-# ?Stopping criterion (currently beta update iteration count)
-# xRegularization parameter \lambda (currently lambda for ridge, gpt recommended, also recommended dropout)
+# x First layer:
+# x   # of nodes
+# x   Activation function
+# x Second layer:
+# x   # of nodes
+# x   Activation function
+# ? Starting values for beta
+# ? Loss function (i.e.: nn.MSELoss() )
+# x Learning rate
+# x Mini-batch subgradient descent: batch size
+# ? Stopping criterion (currently beta update iteration count, also need to consider stopping crit hyper params)
+# x Regularization parameter \lambda (currently lambda for ridge, gpt recommended, gpt also recommended dropout)
 def trained_neural_net(training_data: TensorDataset, nodes_layer_one: int, nodes_layer_two: int,
-                       activation_f_one: nn.Module, activation_f_two: nn.Module, output_f: nn.Module,
-                       loss_f: nn.Module, learning_rate: float, batch_size: int, stopping_criterion: int,
-                       regularization_lambda: float):
+                       activation_f_one: nn.Module, activation_f_two: nn.Module, loss_f: nn.Module, learning_rate: float,
+                       batch_size: int, stopping_criterion: int, regularization_lambda: float):
     feature_count = training_data.tensors[0].shape[1]
     training_loader = DataLoader(training_data, batch_size=batch_size, shuffle=True)
 
     model = RegressionNeuralNet(feature_count,
                                 nodes_layer_one, activation_f_one,
-                                nodes_layer_two, activation_f_two,
-                                output_f)
+                                nodes_layer_two, activation_f_two)
 
     optimizer = optim.Adam(model.parameters(),
                            lr=learning_rate,
@@ -148,7 +70,100 @@ def trained_neural_net(training_data: TensorDataset, nodes_layer_one: int, nodes
             loss.backward()
             optimizer.step()
 
+    model.eval()
+
     return model
 
+def objective(trial):
+    params = {
+        'nodes_layer_one': trial.suggest_int('nodes_layer_one', 1, 50),
+        'nodes_layer_two': trial.suggest_int('nodes_layer_two', 1, 50),
+        'activation_f_one': trial.suggest_categorical('activation_f_one', [nn.Softplus(), nn.ReLU()]), # nn.Softplus()
+        'activation_f_two': trial.suggest_categorical('activation_f_two', [nn.Softplus(), nn.ReLU()]),
+        'learning_rate': trial.suggest_float('learning_rate', 0.0001, 1, log=True),
+        'batch_size': trial.suggest_int('batch_size', 3, 100),
+        'stopping_criterion': trial.suggest_int('stopping_criterion', 100, 1000),
+        'regularization_lambda': trial.suggest_float('regularization_lambda', 1e-4, 10, log=True)
+    }
+
+    # loss_f = nn.MSELoss()
+
+    return inner_cv(outer_fold=fold, params=params, loss_f=global_loss_f)
+
+def inner_cv(outer_fold: int, params: dict, loss_f: nn.Module):
+    inner_mse = []
+
+    for inner_split in folds[outer_fold]["inner_folds"]:
+        train_x = torch.tensor(inner_split["train_X"].values, dtype=torch.float32)
+        train_y = torch.tensor(inner_split["train_y"].values, dtype=torch.float32).unsqueeze(1)
+        training_data = TensorDataset(train_x, train_y)
+
+        model = trained_neural_net(training_data=training_data,
+                                   nodes_layer_one= params['nodes_layer_one'],
+                                   activation_f_one=params['activation_f_one'],
+                                   nodes_layer_two=params['nodes_layer_two'],
+                                   activation_f_two=params['activation_f_two'],
+                                   loss_f=loss_f,
+                                   learning_rate=params['learning_rate'],
+                                   batch_size=params['batch_size'],
+                                   stopping_criterion=params['stopping_criterion'],
+                                   regularization_lambda=params['regularization_lambda']
+                                   )
+
+        test_x = torch.tensor(inner_split["test_X"].values, dtype=torch.float32)
+        test_y = torch.tensor(inner_split["test_y"].values, dtype=torch.float32).unsqueeze(1)
+        with torch.no_grad():
+            preds = model(test_x)
+            loss = loss_f(preds, test_y)
+            inner_mse.append(loss.item())
+
+    return np.mean(inner_mse)
+
+
 if __name__ == "__main__":
-    main()
+    global_loss_f = nn.MSELoss()
+
+    folds = data_utils.get_folds(2, 'minmax')
+    n_folds = len(folds)
+    print("Data read")
+
+    output = {"train-rmse": [], "val-rmse": [], "oos-rmse": []}
+
+    for fold in range(n_folds):
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=100, timeout=600)
+        fig = plot_parallel_coordinate(study)
+        show(fig)
+
+        best_params = study.best_params
+        print(f"Fold {fold} best params: {best_params}")
+
+        # Full fold training data
+        ff_train_X = torch.tensor(folds[fold]["train_X"].values, dtype=torch.float32)
+        ff_train_y = torch.tensor(folds[fold]["train_y"].values, dtype=torch.float32).unsqueeze(1)
+        ff_training_data = TensorDataset(ff_train_X, ff_train_y)
+
+        final_model = trained_neural_net(training_data=ff_training_data,
+                                         loss_f=global_loss_f,
+                                         nodes_layer_one=best_params['nodes_layer_one'],
+                                         activation_f_one=best_params['activation_f_one'],
+                                         nodes_layer_two=best_params['nodes_layer_two'],
+                                         activation_f_two=best_params['activation_f_two'],
+                                         learning_rate=best_params['learning_rate'],
+                                         batch_size=best_params['batch_size'],
+                                         stopping_criterion=best_params['stopping_criterion'],
+                                         regularization_lambda=best_params['regularization_lambda']
+                                         )
+
+        holdout_X = torch.tensor(folds[fold]["holdout_X"].values, dtype=torch.float32)
+        holdout_y = torch.tensor(folds[fold]["holdout_y"].values, dtype=torch.float32).unsqueeze(1)
+
+        with torch.no_grad():
+            fold_preds = final_model(holdout_X)
+            fold_loss = global_loss_f(fold_preds, holdout_y)
+            output["oos-rmse"].append(fold_loss.item())
+
+        print(f"Fold {fold} HOLDOUT MSE: {fold_loss:.4f}")
+
+    mse_mean = np.mean(output["oos-rmse"])
+    print(f"\nOverall HOLDOUT MSE: {mse_mean:.4f}")
