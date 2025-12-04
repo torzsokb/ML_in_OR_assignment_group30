@@ -11,6 +11,8 @@ df = df.drop(columns=["y2"], axis=1)
 n_folds = len(pd.unique(df["cv_fold"]))
 
 folds = {}
+num_boost_round = 6
+
 
 for fold in range(n_folds):
     
@@ -91,21 +93,18 @@ def objective(trial):
               'refresh_leaf': trial.suggest_categorical('refresh_leaf', [0, 1]),
               'num_parallel_tree': trial.suggest_int('num_parallel_tree', 1, 15),
               'random_state': 0,
-            #   'objective': trial.suggest_categorical('objective', ["binary:logistic", "binary:hinge", "binary:logitraw"]),
               'objective': trial.suggest_categorical('objective', ["binary:logistic"]),
-
-              'eval_metric': ["error", "auc", "logloss"]
+              'eval_metric': ["error", "logloss"]
               }
 
-    num_boost_round = trial.suggest_categorical('num_boost_round', [6])
-    early_stopping_rounds = trial.suggest_int('early_stopping_rounds', 2, 25)
+    early_stopping_rounds = trial.suggest_int('early_stopping_rounds', 2, 5)
     min_delta = trial.suggest_float('min_delta', 0.000001, 0.2, log=True)
     return inner_cv(outer_fold=k, params=params, num_boost_round=num_boost_round, early_stopping_rounds=early_stopping_rounds, min_delta=min_delta)
     
 
 def main():
 
-    output = {"cv-error": [], "train-error": [], "val-error": [], "oos-error": [], "train-auc": [], "val-auc": [], "oos-auc": [], "train-logloss": [], "val-logloss": [], "oos-logloss": []}
+    output = {"cv-error": [], "train-error": [], "val-error": [], "oos-error": [], "train-logloss": [], "val-logloss": [], "oos-logloss": []}
     fold_params = {}
     feature_importances = {}
 
@@ -119,11 +118,11 @@ def main():
         final_evals_result = {}
         params=study.best_params
         print(params)
-        params["eval_metric"] = ["error", "auc", "logloss"]
+        params["eval_metric"] = ["error", "logloss"]
         # params["num_class"] = 1
         # params["scale_pos_weight"]=folds[k]["balance"]
         es = xgb.callback.EarlyStopping(rounds=study.best_params["early_stopping_rounds"], metric_name="error", data_name="val", save_best=True, maximize=False, min_delta=study.best_params["min_delta"])
-        model = xgb.train(params, num_boost_round=study.best_params["num_boost_round"], 
+        model = xgb.train(params, num_boost_round=num_boost_round, 
                           dtrain=folds[k]["train"], 
                           evals=[(folds[k]["holdout"], "oos"), (folds[k]["train"], "train"), (folds[k]["validation"], "val")],
                           callbacks = [es],
@@ -135,16 +134,10 @@ def main():
         output["val-error"].append(final_evals_result["val"]["error"][best_idx])
         output["oos-error"].append(final_evals_result["oos"]["error"][best_idx])
 
-        output["train-auc"].append(final_evals_result["train"]["auc"][best_idx])
-        output["val-auc"].append(final_evals_result["val"]["auc"][best_idx])
-        output["oos-auc"].append(final_evals_result["oos"]["auc"][best_idx])
-
         output["train-logloss"].append(final_evals_result["train"]["logloss"][best_idx])
         output["val-logloss"].append(final_evals_result["val"]["logloss"][best_idx])
         output["oos-logloss"].append(final_evals_result["oos"]["logloss"][best_idx])
 
-        # predictions = model.predict(folds[k]["holdout"])
-        # print(predictions)
         importance_gain  = model.get_score(importance_type='gain')
         importance_weight = model.get_score(importance_type='weight')
 
@@ -157,13 +150,13 @@ def main():
         
 
         next()
-    with open(f"documents/outputs/xgboost/classification/params/xgb_es_rr_6.json", "w") as f:
+    with open(f"documents/outputs/xgboost/classification/params/xgb_es_r{num_boost_round}.json", "w") as f:
             json.dump(fold_params, f)
-    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_es_rr_6.json", "w") as f:
+    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_es_r{num_boost_round}.json", "w") as f:
             json.dump(feature_importances, f)
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_xgb_es_rr_6.csv", index=False)
+    metrics.to_csv(f"documents/outputs/xgboost/classification/performance_metrics/out_xgb_es_r{num_boost_round}.csv", index=False)
 
 
 

@@ -12,6 +12,8 @@ df = df.drop(columns=["y2"], axis=1)
 n_folds = len(pd.unique(df["cv_fold"]))
 
 folds = {}
+num_boost_round = 4
+
 
 for fold in range(n_folds):
     
@@ -81,7 +83,6 @@ def objective(trial):
               'eval_metric': ["error", "logloss"]
               }
 
-    num_boost_round = trial.suggest_categorical('num_boost_round', [4])
     return inner_cv(outer_fold=k, params=params, num_boost_round=num_boost_round)
     
 
@@ -102,7 +103,7 @@ def main():
         params=study.best_params
         print(params)
         params["eval_metric"] = ["error", "logloss"]
-        model = xgb.train(params, num_boost_round=study.best_params["num_boost_round"], 
+        model = xgb.train(params, num_boost_round=num_boost_round, 
                           dtrain=folds[k]["train"], 
                           evals=[(folds[k]["holdout"], "oos"), (folds[k]["train"], "train")],
                           evals_result=final_evals_result, verbose_eval=True)
@@ -129,13 +130,13 @@ def main():
 
         next()
 
-    with open(f"documents/outputs/xgboost/classification/params/xgb_noes_r.json", "w") as f:
+    with open(f"documents/outputs/xgboost/classification/params/xgb_noes_r{num_boost_round}.json", "w") as f:
             json.dump(fold_params, f)
-    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_noes_r.json", "w") as f:
+    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_noes_r{num_boost_round}.json", "w") as f:
             json.dump(feature_importances, f)
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv("documents/outputs/xgboost/classification/performance_metrics/out_noes_r.csv", index=False)
+    metrics.to_csv(f"documents/outputs/xgboost/classification/performance_metrics/out_noes_r{num_boost_round}.csv", index=False)
 
 
 

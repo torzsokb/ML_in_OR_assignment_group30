@@ -34,8 +34,6 @@ for fold in range(n_folds):
     holdout_X = holdout_df.drop(columns=["y1", "cv_fold"], axis=1).to_numpy()
     holdout_y = holdout_df[["y1"]].to_numpy()
 
-
-
     inner_folds = []
     for i, inner_fold in enumerate(fold_numbers):
         if not inner_fold == fold:

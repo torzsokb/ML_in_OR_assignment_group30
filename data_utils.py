@@ -3,8 +3,6 @@ import pandas as pd
 from sklearn.model_selection import KFold
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
-
-
 def read_unprocessed_data(path: str) -> pd.DataFrame:
     df = pd.read_csv(path, header=None)
     n = len(df)
@@ -104,15 +102,44 @@ def get_folds(target_mode: int, scaler_type: str=None) -> dict:
     return folds
 
 
+def save_processed_evaluation_data():
+
+    df_train = pd.read_csv("documents/data/processed_data.csv", sep=",")
+    df_test = read_unprocessed_data("documents/data/GroupAssignment-Features.csv")
+
+    cols_to_scale = ["x1", "x2", "x3", "x4", "x5"]
+    scaler = MinMaxScaler(clip=True)
+    scaler.fit(df_train[cols_to_scale])
+    df_test[cols_to_scale] = scaler.transform(df_test[cols_to_scale])
+    df_train[cols_to_scale] = scaler.transform(df_train[cols_to_scale])
+
+    df_train.to_csv("documents/data/final_preprocessed_training_data.csv", index=False)
+    df_test.to_csv("documents/data/final_preprocessed_evaluation_data.csv", index=False)
+
+def save_data_to_hand_in(path_y1_pred: str, path_y2_preds: str):
+
+    df = pd.read_csv("documents/data/", header=None)
+    n_cols = len(df.columns) - 2 #two response variables
+    new_col_names = ["y1", "y2"]
+    for i in range(n_cols):
+        new_col_names.append(f"x{i+1}")
+    df.columns = new_col_names
+
+    # FINISH BASED ON HOW PREDICTIONS ARE SAVED
+    
+    
+
+
 
 def main():
+
     path = "documents/data/GroupAssignment-Data.csv"
     df = read_unprocessed_data(path=path)
     make_cv_splits(df)
     file_name = "documents/data/processed_data.csv"
     df.to_csv(file_name, index=False)
 
-
+    save_processed_evaluation_data()
 
 if __name__ == "__main__":
     main()
