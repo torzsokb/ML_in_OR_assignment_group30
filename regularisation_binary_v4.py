@@ -10,6 +10,22 @@ folds = get_folds(target_mode=1, scaler_type=None)
 n_folds = len(folds)
 current_fold = 0  
 
+def classification_error(y_true, y_pred):
+    return 1 - accuracy_score(y_true, y_pred)
+
+def inner_cv_error(outer_fold, C, penalty, solver):
+    errors = []
+    for inner_split in folds[outer_fold]["inner_folds"]:
+        model = make_pipeline(
+            MinMaxScaler(),
+            LogisticRegression(C=C, penalty=penalty, solver=solver, max_iter=5000)
+        )
+        model.fit(inner_split["train_X"], inner_split["train_y"])
+        pred = model.predict(inner_split["test_X"])
+        errors.append(classification_error(inner_split["test_y"], pred))
+    return np.mean(errors)
+
+
 def inner_cv(outer_fold: int, C: float, penalty: str, solver: str) -> float:
     inner_losses = []
 
@@ -68,9 +84,34 @@ if __name__ == "__main__":
         loss = log_loss(folds[current_fold]["holdout_y"], probas)
 
         print(f"Fold {current_fold} HOLDOUT Accuracy: {acc:.3f}, Log-loss: {loss:.3f}")
+        
+        # compute cv-error using the best params
+        cv_err = inner_cv_error(current_fold, best_params["C"], best_params["penalty"], best_params["solver"])
 
-        results.append({"accuracy": acc, "log_loss": loss})
+        # training predictions
+        train_pred = final_model.predict(folds[current_fold]["train_X"])
+        train_prob = final_model.predict_proba(folds[current_fold]["train_X"])
 
-    acc_mean = np.mean([r["accuracy"] for r in results])
-    loss_mean = np.mean([r["log_loss"] for r in results])
-    print(f"\nOverall HOLDOUT Accuracy: {acc_mean:.3f}, Log-loss: {loss_mean:.3f}")
+        train_err = classification_error(folds[current_fold]["train_y"], train_pred)
+        train_ll = log_loss(folds[current_fold]["train_y"], train_prob)
+
+        # out-of-sample = holdout
+        oos_err = classification_error(folds[current_fold]["holdout_y"], preds)
+        oos_ll = loss
+
+        fold_results = {
+            "fold": current_fold,
+            "cv-error": cv_err,
+            "train-error": train_err,
+            "oos-error": oos_err,
+            "train-logloss": train_ll,
+            "oos-logloss": oos_ll
+        }
+
+        results.append(fold_results)
+
+    print("\nfold  cv-error  train-error  oos-error  train-logloss  oos-logloss")
+    for r in results:
+        print(f"{r['fold']:>2}   {r['cv-error']:.6f}   {r['train-error']:.6f}   "
+          f"{r['oos-error']:.6f}   {r['train-logloss']:.6f}   {r['oos-logloss']:.6f}")
+
