@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="Black">
+    <option name="sdkName" value="ML_in_OR_assignment_group30" />
+  </component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11 (ML_in_OR_assignment_group30)" project-jdk-type="Python SDK" />
 </project>

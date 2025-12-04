@@ -52,7 +52,7 @@ def get_folds(target_mode: int, scaler_type: str=None) -> dict:
 
         case _:
             target = ["y1", "y2"]
-            cols_to_drop = ["cv_fold"]
+            cols_to_drop = ["y1", "y2", "cv_fold"]
 
     match scaler_type:
         case "minmax":
@@ -127,9 +127,11 @@ def save_data_to_hand_in(path_y1_pred: str, path_y2_preds: str):
 
     # FINISH BASED ON HOW PREDICTIONS ARE SAVED
     
-    
+def get_preprocessed_evaluation_data() -> pd.DataFrame:
+    df = pd.read_csv(r"C:\Users\roela\PycharmProjects\ML_in_OR_assignment_group30\documents\data\final_preprocessed_evaluation_data.csv", sep=",")
 
-
+    # Drop empty y columns
+    return df.dropna(axis=1, how="all")
 
 def main():
 
