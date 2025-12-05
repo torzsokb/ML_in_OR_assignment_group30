@@ -116,16 +116,22 @@ def save_processed_evaluation_data():
     df_train.to_csv("documents/data/final_preprocessed_training_data.csv", index=False)
     df_test.to_csv("documents/data/final_preprocessed_evaluation_data.csv", index=False)
 
-def save_data_to_hand_in(path_y1_pred: str, path_y2_preds: str):
+def save_data_to_hand_in():
 
-    df = pd.read_csv("documents/data/", header=None)
+    df = pd.read_csv("documents/data/GroupAssignment-Features.csv", header=None)
     n_cols = len(df.columns) - 2 #two response variables
     new_col_names = ["y1", "y2"]
     for i in range(n_cols):
         new_col_names.append(f"x{i+1}")
     df.columns = new_col_names
 
-    # FINISH BASED ON HOW PREDICTIONS ARE SAVED
+    y1_df = pd.read_csv("documents/outputs/neural_net/predictions.csv")
+    y2_df = pd.read_csv("poisson_predictions.csv")
+
+    df["y1"] = y1_df["y1"]
+    df["y2"] = y2_df["y2_pred"]
+
+    df.to_csv("documents/data/final_predictions.csv", index=False)
     
 def get_preprocessed_evaluation_data() -> pd.DataFrame:
     df = pd.read_csv(r"C:\Users\roela\PycharmProjects\ML_in_OR_assignment_group30\documents\data\final_preprocessed_evaluation_data.csv", sep=",")
@@ -135,13 +141,15 @@ def get_preprocessed_evaluation_data() -> pd.DataFrame:
 
 def main():
 
-    path = "documents/data/GroupAssignment-Data.csv"
-    df = read_unprocessed_data(path=path)
-    make_cv_splits(df)
-    file_name = "documents/data/processed_data.csv"
-    df.to_csv(file_name, index=False)
+    # path = "documents/data/GroupAssignment-Data.csv"
+    # df = read_unprocessed_data(path=path)
+    # make_cv_splits(df)
+    # file_name = "documents/data/processed_data.csv"
+    # df.to_csv(file_name, index=False)
 
-    save_processed_evaluation_data()
+    # save_processed_evaluation_data()
+
+    save_data_to_hand_in()
 
 if __name__ == "__main__":
     main()
