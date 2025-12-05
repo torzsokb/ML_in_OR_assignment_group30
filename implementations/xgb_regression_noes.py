@@ -124,13 +124,13 @@ def main():
 
         next()
 
-    with open(f"documents/outputs/xgboost/classification/params/xgb_noes_r{num_boost_round}.json", "w") as f:
+    with open(f"documents/outputs/xgboost/regression/params/xgb_noes_r{num_boost_round}.json", "w") as f:
             json.dump(fold_params, f)
-    with open(f"documents/outputs/xgboost/classification/performance_metrics/xgb_noes_r{num_boost_round}.json", "w") as f:
+    with open(f"documents/outputs/xgboost/regression/performance_metrics/xgb_noes_r{num_boost_round}.json", "w") as f:
             json.dump(feature_importances, f)
     metrics = pd.DataFrame.from_dict(output)
     print(metrics.head(8))
-    metrics.to_csv(f"documents/outputs/xgboost/classification/performance_metrics/out_noes_r{num_boost_round}.csv", index=False)
+    metrics.to_csv(f"documents/outputs/xgboost/regression/performance_metrics/out_noes_r{num_boost_round}.csv", index=False)
 
 
 

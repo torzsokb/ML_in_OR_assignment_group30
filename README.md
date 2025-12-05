@@ -12,7 +12,7 @@ For the assignment we needed to fit models on dataset which contains two respons
 
 ### XGBoost
 
-There are for implementations of XGBoost models in this project two for classification and two for regression, one with early stopping and one without for both. The scripts also parallel plots for the hyperparameter tuning and save all relevant data.
+There are for implementations of XGBoost models in this project two for classification and two for regression, one with early stopping and one without for both (`xgb_binary_es.py`, `xgb_binary_noes.py`, and `xgb_regression_es.py`, `xgb_regression_noes.py` respectively). The regression and classafication models search the same hyperparameter space, with one exception: the regression models can choose the objective function to be either MSE or poisson regression log-likelihood. The scripts also parallel plots for the hyperparameter tuning and save all relevant data.
 
 ### Neural Nets
 
@@ -22,4 +22,4 @@ To run the neural net code to create predictions for the out-of-sample data run 
 
 ### Regularisation
 
-
+For the binary classification tasks we used a regularized binary logistic regression. The script to run the hyperparameter tuning and nested cross validation is `regularisation_binary_v4.py`. For the regression tasks we tried two different regression models. Elastic net, which is the regularised version of a least squares model and regularized Poisson regression, (found at `regularisation_regression_v3.py`) as they were designed to deal with count variables. `prediction_poisson_reg_y2.py` runs the final classifications on the unlabeled dataset.
