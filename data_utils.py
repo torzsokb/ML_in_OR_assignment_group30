@@ -126,7 +126,7 @@ def save_data_to_hand_in():
     df.columns = new_col_names
 
     y1_df = pd.read_csv("documents/outputs/neural_net/predictions.csv")
-    y2_df = pd.read_csv("poisson_predictions.csv")
+    y2_df = pd.read_csv("documents/outputs/regularisation/poisson_predictions.csv")
 
     df["y1"] = y1_df["y1"]
     df["y2"] = y2_df["y2_pred"]
@@ -149,7 +149,8 @@ def main():
 
     # save_processed_evaluation_data()
 
-    save_data_to_hand_in()
+    # save_data_to_hand_in()
+    pass
 
 if __name__ == "__main__":
     main()
